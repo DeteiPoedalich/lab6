@@ -1,0 +1,125 @@
+<!-- index.html (frontend) -->
+<!DOCTYPE html>
+<html>
+<head>
+<title>Voting System</title>
+</head>
+<body>
+
+<h1>Vote!</h1>
+<div id="voting-block"></div>
+
+<h1>Statistics</h1>
+<div id="stats-block"></div>
+
+<button id="xml-button">Results in XML</button>
+<button id="html-button">Results in HTML</button>
+<button id="json-button">Results in JSON</button>
+<button id="undo-vote">Undo Last Vote</button>
+
+
+<script>
+  // ... (fetch calls and DOM manipulation - see below) ...
+  fetch('/variants')
+  .then(res => res.json())
+  .then(variants => {
+    const votingBlock = document.getElementById('voting-block');
+    for (const variant in variants) {
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'vote';
+      radio.value = variant;
+      radio.id = variant;
+      const label = document.createElement('label');
+      label.htmlFor = variant;
+      label.textContent = variant;
+      votingBlock.appendChild(radio);
+      votingBlock.appendChild(label);
+      votingBlock.appendChild(document.createElement('br'));
+    }
+
+    const voteButton = document.createElement('button');
+    voteButton.textContent = 'Vote';
+    voteButton.addEventListener('click', () => {
+      const selectedVote = document.querySelector('input[name="vote"]:checked');
+      if (!selectedVote) {
+        alert("Please select a voting option.");
+        return;
+      }
+      fetch('/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote: selectedVote.value })
+      })
+      .then(res => res.json())
+      .then(updateStats);
+      document.querySelector('input[name="vote"]:checked').checked = false;
+    });
+    votingBlock.appendChild(voteButton);
+  });
+
+  function updateStats(stats) {
+    const statsBlock = document.getElementById('stats-block');
+    statsBlock.innerHTML = ''; // Clear previous stats
+    for (const variant in stats) {
+      const p = document.createElement('p');
+      p.textContent = `${variant}: ${stats[variant]}`;
+      statsBlock.appendChild(p);
+    }
+  }
+  
+  function downloadResults(format) {
+    fetch('/results', { headers: { Accept: `application/${format}` } })
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        // Key change: handle different response types correctly
+        if (format === 'json' || format === 'xml') {
+            return res.blob(); // Use blob for json and xml
+        } else {
+            return res.text(); // Use text for html
+        }
+
+    })
+    .then(data => {
+        // Create Blob for all formats, using data directly for text and converting JSON to string
+        const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data)], { type: `application/${format === 'json' ? 'json' : format === 'xml' ? 'xml' : 'text/html;charset=utf-8'}`});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `results.${format.toLowerCase()}`; // Simplified file extension
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    })
+    .catch(error => {
+        console.error('Error downloading results:', error);
+        alert('Error downloading results. See console for details.');
+    });
+}
+
+
+document.getElementById('xml-button').addEventListener('click', () => downloadResults('xml'));
+document.getElementById('html-button').addEventListener('click', () => downloadResults('html'));
+document.getElementById('json-button').addEventListener('click', () => downloadResults('json'));
+
+document.getElementById('undo-vote').addEventListener('click', () => {
+    fetch('/vote', { method: 'DELETE' })
+        .then(res => res.json())
+        .then(updateStats)
+        .catch(error => console.error('Error undoing vote:', error));
+});
+
+
+  // Initial stats update
+  fetch('/stat', { method: 'POST' }) // Use POST for consistency
+  .then(res => res.json())
+  .then(updateStats);
+
+</script>
+
+</body>
+</html>
