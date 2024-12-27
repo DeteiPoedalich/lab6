@@ -68,43 +68,32 @@
     }
   }
   
-  function downloadResults(format) {
-    fetch('/results', { headers: { Accept: `application/${format}` } })
-    .then(res => {
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        // Key change: handle different response types correctly
-        if (format === 'json' || format === 'xml') {
-            return res.blob(); // Use blob for json and xml
-        } else {
-            return res.text(); // Use text for html
-        }
-
-    })
-    .then(data => {
-        // Create Blob for all formats, using data directly for text and converting JSON to string
-        const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data)], { type: `application/${format === 'json' ? 'json' : format === 'xml' ? 'xml' : 'text/html;charset=utf-8'}`});
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `results.${format.toLowerCase()}`; // Simplified file extension
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
-    })
-    .catch(error => {
-        console.error('Error downloading results:', error);
-        alert('Error downloading results. See console for details.');
-    });
+  async function downloadResults(format) {
+    const response = await fetch('/results', {
+                headers: {
+                    'Accept': format
+                }
+            });
+    if (response.ok) {
+                const blob = await response.blob(); // Получаем данные как Blob
+                const url = window.URL.createObjectURL(blob); // Создаем URL для скачивания
+                const a = document.createElement('a'); // Создаем ссылку
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `stats.${format.split('/')[1]}`; // Устанавливаем имя файла
+                document.body.appendChild(a);
+                a.click(); // Инициализируем скачивание
+                window.URL.revokeObjectURL(url); // Освобождаем память
+                a.remove(); // Удаляем ссылку
+            } else {
+                alert('Ошибка при скачивании данных.');
+            }
 }
 
 
-document.getElementById('xml-button').addEventListener('click', () => downloadResults('xml'));
-document.getElementById('html-button').addEventListener('click', () => downloadResults('html'));
-document.getElementById('json-button').addEventListener('click', () => downloadResults('json'));
+document.getElementById('xml-button').addEventListener('click', () => downloadResults('application/xml'));
+document.getElementById('html-button').addEventListener('click', () => downloadResults('text/html'));
+document.getElementById('json-button').addEventListener('click', () => downloadResults('application/json'));
 
 document.getElementById('undo-vote').addEventListener('click', () => {
     fetch('/vote', { method: 'DELETE' })
